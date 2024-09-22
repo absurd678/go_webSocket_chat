@@ -13,4 +13,5 @@
 # TODO: ARTICLE ABOUT HTML IN GO
 
 HTML pages -> https://go.dev/doc/articles/wiki/
-Just copy and paste. Change according to my preference. Continue with my task
+- Make it show 100 last messages
+- Make it paste new messages at the new line
