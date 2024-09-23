@@ -1,10 +1,6 @@
 <!-- view.html -->
 <h1>{{.Title}}</h1>
-
-<div>
-    {{printf "%s" .Body}}
-</div>
-
+<div>{{.Body}}</div>
 <form action="/save/{{.Title}}" method="POST">
     <div>
         <textarea name="body" rows="20" cols="80"></textarea>

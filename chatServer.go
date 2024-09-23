@@ -1,16 +1,19 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 )
 
 type Page struct {
 	Title string
-	Body  []byte
+	Body  template.HTML
 }
 
 func (p *Page) save() error {
@@ -19,7 +22,18 @@ func (p *Page) save() error {
 	if err != nil {
 		return nil
 	}
-	postBody := string(body) + "\r\n" + string(p.Body)
+
+	sc := bufio.NewScanner(bytes.NewReader(body))
+	var fileBody string
+	lines := make([]string, 0)
+	for sc.Scan() {
+		lines = append(lines, sc.Text())
+	}
+	if len(lines) == 5 {
+		lines = lines[1:]
+	}
+	fileBody = strings.Join(lines, "\n")
+	postBody := fileBody + "\n" + string(p.Body)
 	return os.WriteFile(filename, []byte(postBody), 0600)
 }
 
@@ -30,7 +44,7 @@ func loadPage(title string) (*Page, error) {
 		return nil, err
 	}
 
-	return &Page{Title: title, Body: body}, nil
+	return &Page{Title: title, Body: template.HTML(string(body))}, nil
 }
 
 func viewHandler(w http.ResponseWriter, r *http.Request, title string) {
@@ -44,7 +58,7 @@ func viewHandler(w http.ResponseWriter, r *http.Request, title string) {
 
 func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
 	body := r.FormValue("body")
-	p := &Page{Title: title, Body: []byte(body)}
+	p := &Page{Title: title, Body: template.HTML(body)}
 	err := p.save()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -56,6 +70,8 @@ func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
 var templates = template.Must(template.ParseFiles("view.html"))
 
 func renderTemplate(w http.ResponseWriter, tmpl string, p *Page) {
+	formattedStr := strings.ReplaceAll(string(p.Body), "\n", "<br>")
+	p = &Page{Title: p.Title, Body: template.HTML(formattedStr)}
 	err := templates.ExecuteTemplate(w, tmpl+".html", p)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

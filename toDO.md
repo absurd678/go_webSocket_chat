@@ -12,6 +12,9 @@
 
 # TODO: ARTICLE ABOUT HTML IN GO
 
-HTML pages -> https://go.dev/doc/articles/wiki/
-- Make it show 100 last messages
-- Make it paste new messages at the new line
+[V] HTML pages -> https://go.dev/doc/articles/wiki/
+[V] Make it show 100 last messages
+[V] Make it paste new messages at the new line
+[] Write the user ip
+[] Eliminate the text window size
+[] Add sockets
