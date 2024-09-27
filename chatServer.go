@@ -1,86 +1,61 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"html/template"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
-	"regexp"
-	"strings"
+
+	"github.com/gorilla/websocket"
 )
 
-type Page struct {
-	Title string
-	Body  template.HTML
+// ------------------------------JSON STRUCTURES ------------------------------
+type Message struct {
+	Author  string `json:"author"`
+	Content string `json:"content"`
 }
 
-func (p *Page) save() error {
-	filename := p.Title + ".txt"
-	body, err := os.ReadFile(filename)
+type ChatHistory struct {
+	Messages []Message `json:"messages"`
+}
+
+var history ChatHistory
+
+func saveMessagesToFile(history ChatHistory, filename string) error {
+	// Сохраняем массив сообщений в файл как JSON
+	data, err := json.Marshal(history)
 	if err != nil {
-		return nil
+		return err
 	}
-
-	sc := bufio.NewScanner(bytes.NewReader(body))
-	var fileBody string
-	lines := make([]string, 0)
-	for sc.Scan() {
-		lines = append(lines, sc.Text())
-	}
-	if len(lines) == 5 {
-		lines = lines[1:]
-	}
-	fileBody = strings.Join(lines, "\n")
-	postBody := fileBody + "\n" + string(p.Body)
-	return os.WriteFile(filename, []byte(postBody), 0600)
+	return os.WriteFile(filename, data, 0600)
 }
 
-func loadPage(title string) (*Page, error) {
-	filename := title + ".txt"
-	body, err := os.ReadFile(filename)
+func loadMessagesFromFile(filename string) (ChatHistory, error) {
+	// Читаем JSON файл с сообщениями
+	data, err := os.ReadFile(filename)
 	if err != nil {
-		return nil, err
+		return ChatHistory{}, err
 	}
 
-	return &Page{Title: title, Body: template.HTML(string(body))}, nil
-}
-
-func viewHandler(w http.ResponseWriter, r *http.Request, title string) {
-	p, err := loadPage(title)
+	var history ChatHistory
+	err = json.Unmarshal(data, &history)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return ChatHistory{}, err
 	}
-	renderTemplate(w, "view", p)
+
+	return history, nil
 }
 
-func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
-	body := r.FormValue("body")
-	p := &Page{Title: title, Body: template.HTML(body)}
-	err := p.save()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	http.Redirect(w, r, "/view/"+title, http.StatusFound)
+//------------------------------HTTP FUNCTIONS ------------------------------
+
+func viewHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "view.html")
 }
 
-var templates = template.Must(template.ParseFiles("view.html"))
+/*
+var validPath = regexp.MustCompile("^/(view)/([a-zA-Z0-9]+)$")
 
-func renderTemplate(w http.ResponseWriter, tmpl string, p *Page) {
-	formattedStr := strings.ReplaceAll(string(p.Body), "\n", "<br>")
-	p = &Page{Title: p.Title, Body: template.HTML(formattedStr)}
-	err := templates.ExecuteTemplate(w, tmpl+".html", p)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-var validPath = regexp.MustCompile("^/(save|view)/([a-zA-Z0-9]+)$")
-
-func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
+func makeHandler(fn func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m := validPath.FindStringSubmatch(r.URL.Path)
 		if m == nil {
@@ -89,11 +64,85 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.Handl
 		}
 		fn(w, r, m[2])
 	}
+}*/
+
+//---------------------------WEB SOCKET FUNCTIONS------------------------
+
+// Upgrader
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+var connections []*websocket.Conn // to save connections
+
+func reader(conn *websocket.Conn, history ChatHistory) {
+
+	for {
+		// read the a message
+		_, p, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("WebSocket error: reader...conn.ReadMessage()")
+			return
+		}
+		// unmarshal the message to a struct
+		var data Message
+		err = json.Unmarshal(p, &data)
+		if err != nil {
+			log.Println("WebSocket error: reader...json.Unmarshal()")
+			continue
+		}
+		// save into the history considering the constraints (<=5)
+		if len(history.Messages) >= 5 {
+			history.Messages = append(history.Messages[1:], data)
+		} else {
+			history.Messages = append(history.Messages, data)
+		}
+		err = saveMessagesToFile(history, "messages.json")
+		if err != nil {
+			log.Println("WebSocket error: reader...saveMessagesToFile()\n", err)
+			return
+		}
+
+		// send the new chat history to all the clients
+		for _, c := range connections {
+			if err := c.WriteJSON(history); err != nil {
+				log.Println(err)
+				return
+			}
+		}
+
+	}
+}
+
+func wsEndpoint(w http.ResponseWriter, r *http.Request) {
+	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
+
+	// upgrade this connection to a WebSocket
+	// connection
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+	}
+	// helpful log statement to show connections
+	log.Println("Client Connected")
+	connections = append(connections, ws)
+
+	history, err := loadMessagesFromFile("messages.json")
+	if err != nil {
+		log.Println("WebSocket error: wsEndpoint...loadMessagesFromFile()\n", err)
+	}
+
+	// Send all messages to the client
+	if err := ws.WriteJSON(history); err != nil {
+		log.Println("WebSocket error: wsEndpoint...WriteJSON\n", err)
+	}
+
+	reader(ws, history)
 }
 
 func main() {
-	http.HandleFunc("/view/", makeHandler(viewHandler))
-	http.HandleFunc("/save/", makeHandler(saveHandler))
+	http.HandleFunc("/ws", wsEndpoint)     // websocket handler over the http handler
+	http.HandleFunc("/view/", viewHandler) // http handler
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

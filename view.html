@@ -1,11 +1,83 @@
-<!-- view.html -->
-<h1>{{.Title}}</h1>
-<div>{{.Body}}</div>
-<form action="/save/{{.Title}}" method="POST">
-    <div>
-        <textarea name="body" rows="20" cols="80"></textarea>
-    </div>
-    <div>
-        <input type="submit" value="Save">
-    </div>
-</form>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Chat</title>
+    <style>
+        #chat-window {
+            height: 300px;
+            width: 100%;
+            border: 1px solid #ccc;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+        }
+        #chat-window div {
+            padding: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>Chat</h1>
+    <div id="chat-window"></div>
+    <input type="text" id="message-input" placeholder="Type a message">
+    <button onclick="sendMessage()">Send</button>
+
+    <script>
+        // Создание WebSocket соединения с сервером
+        let socket = new WebSocket("ws://localhost:8080/ws");
+
+        // При успешном соединении с сервером
+        socket.onopen = function(event) {
+            console.log("WebSocket соединение установлено");
+        };
+
+        // Получение сообщений от сервера
+        socket.onmessage = function(event) {
+            let chatWindow = document.getElementById("chat-window");
+            let messages = JSON.parse(event.data).messages;  // Предполагаем, что сообщения приходят в JSON
+
+            // Очищаем окно чата и отображаем новые сообщения
+            chatWindow.innerHTML = '';  
+            messages.forEach(function(msg) {
+                let messageElement = document.createElement("div");
+                messageElement.textContent = msg.author + ": " + msg.content;
+                chatWindow.appendChild(messageElement);
+            });
+
+            // Прокручиваем вниз, чтобы видеть новые сообщения
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        };
+
+        // Отправка нового сообщения
+        function sendMessage() {
+            let input = document.getElementById("message-input");
+            let message = {
+                author: "User",  // Имя пользователя можно получить из сессии или формы
+                content: input.value
+            };
+
+            // Отправляем сообщение на сервер в формате JSON
+            socket.send(JSON.stringify(message));
+
+            // Очищаем поле ввода
+            input.value = '';
+        }
+
+        // Обработка ошибок WebSocket
+        socket.onerror = function(error) {
+            console.error("WebSocket ошибка:", error);
+        };
+
+        // Обработка закрытия соединения
+        socket.onclose = function(event) {
+            if (event.wasClean) {
+                console.log(`Соединение закрыто чисто, код: ${event.code}, причина: ${event.reason}`);
+            } else {
+                console.error('Соединение закрыто неожиданно');
+            }
+        };
+    </script>
+</body>
+</html>
