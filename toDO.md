@@ -22,7 +22,7 @@ Add up sockets
 [V] Paste JS code into HTML
 [V] Add websocket handler into the server
 [V] Replace the .txt file with .json file and send it in the wsHandler
-[] The laptop does not receive json
+[V] The laptop does not receive json
 [] The error occurs when disconnect from the server (for PC)
 
 Как здесь все работает

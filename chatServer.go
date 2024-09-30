@@ -9,6 +9,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// -----------------------------CONSTANTS-----------------------------------
+const maxMessageAmount int = 5
+
 // ------------------------------JSON STRUCTURES ------------------------------
 type Message struct {
 	Author  string `json:"author"`
@@ -52,20 +55,6 @@ func viewHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "view.html")
 }
 
-/*
-var validPath = regexp.MustCompile("^/(view)/([a-zA-Z0-9]+)$")
-
-func makeHandler(fn func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		m := validPath.FindStringSubmatch(r.URL.Path)
-		if m == nil {
-			http.NotFound(w, r)
-			return
-		}
-		fn(w, r, m[2])
-	}
-}*/
-
 //---------------------------WEB SOCKET FUNCTIONS------------------------
 
 // Upgrader
@@ -78,12 +67,16 @@ var connections []*websocket.Conn // to save connections
 func reader(conn *websocket.Conn, history ChatHistory) {
 
 	for {
-		// read the a message
+		// read a message
 		_, p, err := conn.ReadMessage()
-		if err != nil {
+		if err == websocket.ErrCloseSent {
+			log.Println("Client disconnected")
+			return
+		} else if err != nil {
 			log.Println("WebSocket error: reader...conn.ReadMessage()")
 			return
 		}
+
 		// unmarshal the message to a struct
 		var data Message
 		err = json.Unmarshal(p, &data)
@@ -92,7 +85,7 @@ func reader(conn *websocket.Conn, history ChatHistory) {
 			continue
 		}
 		// save into the history considering the constraints (<=5)
-		if len(history.Messages) >= 5 {
+		if len(history.Messages) >= maxMessageAmount {
 			history.Messages = append(history.Messages[1:], data)
 		} else {
 			history.Messages = append(history.Messages, data)

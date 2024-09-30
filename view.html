@@ -25,59 +25,62 @@
     <button onclick="sendMessage()">Send</button>
 
     <script>
-        // Создание WebSocket соединения с сервером
-        let socket = new WebSocket("ws://localhost:8080/ws");
+ // Генерация уникального ID пользователя
+ let userId = 'User_' + Date.now(); // Уникальный ID, основанный на времени
 
-        // При успешном соединении с сервером
-        socket.onopen = function(event) {
-            console.log("WebSocket соединение установлено");
-        };
+// Создание WebSocket соединения с сервером
+let socket = new WebSocket("ws://192.168.1.71:8080/ws");
 
-        // Получение сообщений от сервера
-        socket.onmessage = function(event) {
-            let chatWindow = document.getElementById("chat-window");
-            let messages = JSON.parse(event.data).messages;  // Предполагаем, что сообщения приходят в JSON
+// При успешном соединении с сервером
+socket.onopen = function(event) {
+    console.log("WebSocket соединение установлено");
+};
 
-            // Очищаем окно чата и отображаем новые сообщения
-            chatWindow.innerHTML = '';  
-            messages.forEach(function(msg) {
-                let messageElement = document.createElement("div");
-                messageElement.textContent = msg.author + ": " + msg.content;
-                chatWindow.appendChild(messageElement);
-            });
+// Получение сообщений от сервера
+socket.onmessage = function(event) {
+    let chatWindow = document.getElementById("chat-window");
+    let messages = JSON.parse(event.data).messages;
 
-            // Прокручиваем вниз, чтобы видеть новые сообщения
-            chatWindow.scrollTop = chatWindow.scrollHeight;
-        };
+    // Очищаем окно чата и отображаем новые сообщения
+    chatWindow.innerHTML = '';
+    messages.forEach(function(msg) {
+        let messageElement = document.createElement("div");
+        messageElement.textContent = msg.author + ": " + msg.content;
+        chatWindow.appendChild(messageElement);
+    });
 
-        // Отправка нового сообщения
-        function sendMessage() {
-            let input = document.getElementById("message-input");
-            let message = {
-                author: "User",  // Имя пользователя можно получить из сессии или формы
-                content: input.value
-            };
+    // Прокручиваем вниз, чтобы видеть новые сообщения
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+};
 
-            // Отправляем сообщение на сервер в формате JSON
-            socket.send(JSON.stringify(message));
+// Отправка нового сообщения
+function sendMessage() {
+    let input = document.getElementById("message-input");
+    let message = {
+        author: userId,  // Используем уникальный ID пользователя
+        content: input.value
+    };
 
-            // Очищаем поле ввода
-            input.value = '';
-        }
+    // Отправляем сообщение на сервер в формате JSON
+    socket.send(JSON.stringify(message));
 
-        // Обработка ошибок WebSocket
-        socket.onerror = function(error) {
-            console.error("WebSocket ошибка:", error);
-        };
+    // Очищаем поле ввода
+    input.value = '';
+}
 
-        // Обработка закрытия соединения
-        socket.onclose = function(event) {
-            if (event.wasClean) {
-                console.log(`Соединение закрыто чисто, код: ${event.code}, причина: ${event.reason}`);
-            } else {
-                console.error('Соединение закрыто неожиданно');
-            }
-        };
+// Обработка ошибок WebSocket
+socket.onerror = function(error) {
+    console.error("WebSocket ошибка:", error);
+};
+
+// Обработка закрытия соединения
+socket.onclose = function(event) {
+    if (event.wasClean) {
+        console.log(`Соединение закрыто чисто, код: ${event.code}, причина: ${event.reason}`);
+    } else {
+        console.error('Соединение закрыто неожиданно');
+    }
+};
     </script>
 </body>
 </html>
